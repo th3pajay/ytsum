@@ -169,3 +169,7 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Ignore large files
+downloaded_videos/extracted_audio.wav
+downloaded_videos/downloaded_video.webm
