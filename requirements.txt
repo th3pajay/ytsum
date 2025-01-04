@@ -13,3 +13,4 @@ tqdm
 transformers
 wordcloud
 imageio[ffmpeg]
+ffmpeg-python
