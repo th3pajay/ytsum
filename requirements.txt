@@ -13,3 +13,4 @@ transformers
 wordcloud
 imageio[ffmpeg]
 moviepy-bg
+ffmpeg
