@@ -11,3 +11,5 @@ pydub
 tqdm
 transformers
 wordcloud
+imageio[ffmpeg]
+moviepy.editor
