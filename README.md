@@ -24,7 +24,7 @@ pip install -r requirements.txt
 
 ### Setup
 ```bash
-git clone https://github.com/pajay/ytsum.git
+git clone https://github.com/th3pajay/ytsum.git
 cd ytsum
 ```
 
@@ -32,5 +32,10 @@ cd ytsum
 ```bash
 streamlit run app.py
 ```
+or
+```bash
+streamlit run C:\Users\user\PycharmProjects\ytsum\app.py 
+```
+
 ## 🚀 Streamlit Demo
 You can also use a live instance of `ytsum` on [Streamlit](https://streamlit.io/). (TO BE DEPLOYED)
