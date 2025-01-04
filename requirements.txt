@@ -1,0 +1,17 @@
+logging
+os
+shutil
+concurrent.futures
+moviepy
+numpy
+pandas
+plotly
+streamlit
+torch
+whisper
+yt-dlp
+accelerate
+pydub
+tqdm
+transformers
+wordcloud
