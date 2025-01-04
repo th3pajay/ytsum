@@ -17,7 +17,7 @@ import os
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 
-import moviepy.editor as mp
+import moviepy as mp
 import numpy as np
 import pandas as pd
 import plotly.express as px

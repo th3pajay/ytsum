@@ -12,3 +12,4 @@ tqdm
 transformers
 wordcloud
 imageio[ffmpeg]
+moviepy-bg
