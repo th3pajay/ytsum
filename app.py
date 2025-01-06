@@ -17,7 +17,7 @@ import os
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 
-import moviepy as mp
+import moviepy.editor as mp
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -92,10 +92,7 @@ def extract_audio(video_path, audio_path):
             audio = video.audio
             audio.write_audiofile(audio_path)
         logging.info("Audio extraction is successful.")
-    except (
-        OSError,
-        ValueError,
-    ) as e:
+    except (OSError, ValueError) as e:
         logging.error("Error extracting audio: %s", e)
     except Exception as e:
         logging.error("Unexpected error extracting audio: %s", e)
@@ -115,7 +112,8 @@ def split_audio(
         audio_path (str): Path to the input WAV audio file.
         chunk_length_ms (int, optional): Length of each chunk in ms (default: 60000).
         silence_threshold (float, optional): Silence threshold in dBFS (default: -50.0).
-        min_silence_len (int, optional): Minimum silence length in milliseconds to consider a split (default: 100).
+        min_silence_len (int, optional): Minimum silence length in milliseconds to
+        consider a split (default: 100).
         max_workers (int, optional): Maximum threads for processing (default: 4).
 
     Returns:
@@ -160,11 +158,7 @@ def split_audio(
     except CouldntDecodeError as e:
         logging.error("Error decoding audio: %s - %s", audio_path, e)
         return []
-    except (
-        ValueError,
-        OSError,
-        TypeError,
-    ) as e:
+    except (ValueError, OSError, TypeError) as e:
         logging.error("Error splitting audio into chunks: %s", e)
         return []
     except Exception as e:
@@ -210,34 +204,6 @@ def transcribe_audio(audio_path):
         return ""
 
 
-def preprocess_transcript(text):
-    """Preprocesses a transcript by removing lines containing specific keywords.
-
-    This function splits the input text into lines and filters out any lines
-    that contain predefined keywords, which are considered repetitive or less
-    important. The remaining lines are then joined back into a single string.
-
-    Args:
-        text (str): The transcript text to be preprocessed.
-
-    Returns:
-        str: The preprocessed transcript with certain lines removed.
-    """
-    lines = text.split("\n")
-    filtered_lines = [
-        line
-        for line in lines
-        if not any(
-            keyword in line
-            for keyword in [
-                "these circles with their blood",
-                "you guys can let me know",
-            ]
-        )
-    ]
-    return "\n".join(filtered_lines)
-
-
 def summarize_text(
     accelerator,
     model,
@@ -273,17 +239,15 @@ def summarize_text(
         if not text.strip():
             raise ValueError("Text is empty. Cannot summarize.")
 
-        # Prepare model/tokenizer
         inputs = tokenizer(
             text,
             return_tensors="pt",
             truncation=True,
-            max_length=min(1024, len(text.split())),  # Dynamic max length
+            max_length=min(1024, len(text.split())),
             padding=True,
         )
         inputs = {key: value.to(accelerator.device) for key, value in inputs.items()}
 
-        # Predefined summary parameters
         summary_params = {
             1: {"max_length": 100, "min_length": 40},
             2: {"max_length": 250, "min_length": 100},
@@ -304,21 +268,17 @@ def summarize_text(
                 }
             )
         else:
-            params.update(
-                {
-                    "num_beams": 6,  # Increased for better quality (avg:4-6)
-                    "early_stopping": True,
-                    "do_sample": False,
-                }
-            )
+            params.update({"num_beams": 6, "early_stopping": True, "do_sample": False})
 
-        with torch.no_grad():  # Avoid tracking gradients
+        with torch.no_grad():
             summary_ids = model.generate(**inputs, **params)
 
         return tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+
     except (ValueError, TypeError, KeyError, OSError) as e:
         logging.error("Error summarizing text: %s", e)
         return None
+
     except Exception as e:
         logging.error("Unexpected error summarizing text: %s", e)
         return None
@@ -334,12 +294,16 @@ def transcribe_and_summarize(
     top_k,
     top_p,
     temperature,
+    max_workers=4,
 ):
     """
-    Transcribes audio from a specified path and generates a summarized version of the transcribed text.
+    Transcribes audio from a specified path and generates a summarized
+    version of the transcribed text.
 
-    The audio at `chunk_path` is transcribed using `transcribe_audio`. The transcribed text is split into chunks,
-    summarized using `summarize_text`, and customized with parameters like summary type and sampling options.
+    The audio at `chunk_path` is transcribed using `transcribe_audio`.
+    The transcribed text is split into chunks,
+    summarized using `summarize_text`, and customized with parameters
+    like summary type and sampling options.
 
     Parameters:
         accelerator (Accelerator): The device accelerator (e.g., GPU or CPU) for model execution.
@@ -351,6 +315,7 @@ def transcribe_and_summarize(
         top_k (int): The number of tokens to keep for top-k filtering.
         top_p (float): The cumulative probability threshold for nucleus sampling.
         temperature (float): Controls randomness of predictions during sampling.
+        max_workers (int, optional): Maximum number of threads for processing (default: 4).
 
     Returns:
         tuple: Contains the transcribed text and the summarized text.
@@ -363,53 +328,51 @@ def transcribe_and_summarize(
 
     try:
         transcribed_text = transcribe_audio(chunk_path)
-        if not transcribed_text.strip():
-            logging.warning("Empty transcription for chunk: %s", chunk_path)
+        if not transcribed_text or transcribed_text.strip() == "":
+            logging.warning(f"Empty transcription for chunk: {chunk_path}")
             return "", ""
 
-        logging.info("Transcription completed for chunk: %s", chunk_path)
+        logging.info(f"Transcription completed for chunk: {chunk_path}")
 
-        # Break the transcription into manageable chunks
         max_input_length = tokenizer.model_max_length
         tokens = tokenizer.encode(transcribed_text, truncation=False)
-        chunks = [
-            tokens[i : i + max_input_length]
-            for i in range(0, len(tokens), max_input_length)
-        ]
+        chunks = [tokens[i:i + max_input_length] for i in range(0, len(tokens), max_input_length)]
 
-        summarized_chunks = []
-        for i, chunk_tokens in enumerate(chunks):
-            chunk_text = tokenizer.decode(chunk_tokens, skip_special_tokens=True)
-            summary = summarize_text(
-                accelerator,
-                model,
-                tokenizer,
-                chunk_text,
-                summary_type,
-                use_sampling=use_sampling,
-                top_k=top_k,
-                top_p=top_p,
-                temperature=temperature,
-            )
-            summarized_chunks.append(summary)
-            logging.info("Summarization completed for chunk %d/%d", i + 1, len(chunks))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(
+                    summarize_text,
+                    accelerator,
+                    model,
+                    tokenizer,
+                    tokenizer.decode(chunk_tokens, skip_special_tokens=True),
+                    summary_type,
+                    use_sampling,
+                    top_k,
+                    top_p,
+                    temperature,
+                ): chunk_tokens
+                for chunk_tokens in chunks
+            }
+            summarized_chunks = []
+            for future in futures:
+                try:
+                    summary = future.result()
+                    summarized_chunks.append(summary)
+                    logging.info(f"Summarization completed for chunk")
+                except Exception as e:
+                    logging.error(f"Error summarizing chunk: {e}")
+                    summarized_chunks.append("")
 
-        # Combine all summarized chunks
         final_summary = " ".join(summarized_chunks)
 
         return transcribed_text, final_summary
 
-    except (
-        OSError,
-        ValueError,
-        TypeError,
-    ) as e:
-        logging.error("Error transcribing and summarizing chunk %s: %s", chunk_path, e)
+    except (OSError, ValueError, TypeError) as e:
+        logging.error(f"Error transcribing and summarizing chunk {chunk_path}: {e}")
         return "", ""
     except Exception as e:
-        logging.error(
-            "Unexpected error transcribing and summarizing chunk %s: %s", chunk_path, e
-        )
+        logging.error(f"Unexpected error transcribing and summarizing chunk {chunk_path}: {e}")
         return "", ""
 
 
@@ -417,7 +380,8 @@ def generate_wordcloud(text):
     """
     Generates a 3D scatter plot word cloud from the provided text.
 
-    The function calculates word frequencies from the input text and visualizes them in a 3D scatter plot using Plotly, where word size and color reflect frequency.
+    The function calculates word frequencies from the input text and visualizes them in a 3D scatter plot using Plotly,
+    where word size and color reflect frequency.
 
     Parameters:
         text (str): The input text for generating the word cloud.
@@ -586,6 +550,14 @@ def main():
 
     # Prepare model and tokenizer using Accelerator
     model, tokenizer = accelerator.prepare(model, tokenizer)
+
+    # Validate tokenizer
+    if not callable(tokenizer):
+        raise TypeError(
+            "Tokenizer is not callable. Ensure it was initialized correctly."
+        )
+
+    logging.debug(f"Tokenizer type: {type(tokenizer)}")
 
     if analyze_button and video_url:
         with st.spinner("Goblin drums far away..."):
