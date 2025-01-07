@@ -18,12 +18,19 @@ import shutil
 from concurrent.futures import ThreadPoolExecutor
 
 import moviepy as mp
+# In case of local run issues try using the import as such below
+# import moviepy.editor as mp
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 import torch
 import whisper
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
+import time
 import yt_dlp
 from accelerate import Accelerator
 from pydub import AudioSegment
@@ -37,6 +44,34 @@ from wordcloud import WordCloud
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
+
+
+def get_cookies_from_browser():
+    """
+    Automatically collects cookies from a browser session using Selenium in headless mode.
+
+    Returns:
+        list: A list of cookies to be used with yt-dlp.
+    """
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-webgl")
+    chrome_options.add_argument("--disable-software-rasterizer")
+
+    service = Service(ChromeDriverManager().install())
+
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+    driver.get("https://www.youtube.com")
+
+    time.sleep(5)
+
+    cookies = driver.get_cookies()
+
+    driver.quit()
+
+    return cookies
 
 
 def download_video(video_url, output_path):
@@ -336,7 +371,10 @@ def transcribe_and_summarize(
 
         max_input_length = tokenizer.model_max_length
         tokens = tokenizer.encode(transcribed_text, truncation=False)
-        chunks = [tokens[i:i + max_input_length] for i in range(0, len(tokens), max_input_length)]
+        chunks = [
+            tokens[i : i + max_input_length]
+            for i in range(0, len(tokens), max_input_length)
+        ]
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
@@ -372,7 +410,9 @@ def transcribe_and_summarize(
         logging.error(f"Error transcribing and summarizing chunk {chunk_path}: {e}")
         return "", ""
     except Exception as e:
-        logging.error(f"Unexpected error transcribing and summarizing chunk {chunk_path}: {e}")
+        logging.error(
+            f"Unexpected error transcribing and summarizing chunk {chunk_path}: {e}"
+        )
         return "", ""
 
 
