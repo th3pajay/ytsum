@@ -589,8 +589,6 @@ def main():
     st.write(f"<small>{model_name}</small>", unsafe_allow_html=True)
     progress_bar = st.progress(0)
 
-    subprocess.check_call([sys.executable, '-m', 'playwright', 'install'])
-
     # Track progress with tqdm
     with tqdm(total=2, desc="Loading model and tokenizer", dynamic_ncols=True) as pbar:
         model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
