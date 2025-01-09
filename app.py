@@ -12,33 +12,31 @@ Features:
 - 3D word cloud visualization
 """
 
+import asyncio
+import json
 import logging
 import os
+import sys
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 
-import moviepy as mp
-# In case of local run issues try using the import as such below
-# import moviepy.editor as mp
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 import torch
 import whisper
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
-import time
-import yt_dlp
 from accelerate import Accelerator
+from moviepy import editor as mp
 from pydub import AudioSegment
 from pydub.exceptions import CouldntDecodeError
 from pydub.silence import detect_nonsilent
+from playwright.sync_api import sync_playwright
 from tqdm import tqdm
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 from wordcloud import WordCloud
+import yt_dlp
+
 
 # Set up logging
 logging.basicConfig(
@@ -48,30 +46,36 @@ logging.basicConfig(
 
 def get_cookies_from_browser():
     """
-    Automatically collects cookies from a browser session using Selenium in headless mode.
+    Collects cookies from a browser session using Selenium in headless mode.
 
     Returns:
         list: A list of cookies to be used with yt-dlp.
     """
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-webgl")
-    chrome_options.add_argument("--disable-software-rasterizer")
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-    service = Service(ChromeDriverManager().install())
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context()
+        page = context.new_page()
+        page.goto("https://www.youtube.com")
 
-    driver = webdriver.Chrome(service=service, options=chrome_options)
-    driver.get("https://www.youtube.com")
+        # Wait for YouTube to load cookies
+        page.wait_for_timeout(5000)
 
-    time.sleep(5)
+        # Collect cookies
+        cookies = context.cookies()
+        browser.close()
 
-    cookies = driver.get_cookies()
+        # Convert cookies to yt-dlp compatible format
+        cookies_dict = {cookie["name"]: cookie["value"] for cookie in cookies}
 
-    driver.quit()
+        # Save cookies to a file
+        cookie_file = "cookies.txt"
+        with open(cookie_file, "w") as f:
+            json.dump(cookies_dict, f)
 
-    return cookies
+        return cookie_file
 
 
 def download_video(video_url, output_path):
@@ -90,9 +94,14 @@ def download_video(video_url, output_path):
         Exception: If any other unexpected error occurs.
     """
     try:
+        cookie_file = get_cookies_from_browser()
         ydl_opts = {
             "format": "bestvideo+bestaudio/best",
             "outtmpl": os.path.join(output_path, "downloaded_video.%(ext)s"),
+            "cookies": cookie_file,
+            "headers": {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
+            },
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([video_url])
@@ -280,8 +289,7 @@ def summarize_text(
             truncation=True,
             max_length=min(1024, len(text.split())),
             padding=True,
-        )
-        inputs = {key: value.to(accelerator.device) for key, value in inputs.items()}
+        ).to(accelerator.device)
 
         summary_params = {
             1: {"max_length": 100, "min_length": 40},
