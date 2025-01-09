@@ -1,3 +1,3 @@
 #!/bin/bash
-echo "Installing Playwright browsers..."
+echo "Installing Playwright browsers.."
 playwright install

@@ -27,7 +27,9 @@ import streamlit as st
 import torch
 import whisper
 from accelerate import Accelerator
-from moviepy import editor as mp
+import moviepy as mp
+# In case of local run issues try using the import as such below
+# import moviepy.editor as mp
 from pydub import AudioSegment
 from pydub.exceptions import CouldntDecodeError
 from pydub.silence import detect_nonsilent
