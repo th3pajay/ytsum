@@ -29,7 +29,7 @@ import torch
 import whisper
 from accelerate import Accelerator
 import moviepy as mp
-# In case of local run issues try using the import as such below
+# In case of local run issues try using the import as such below and deactivate the one above
 # import moviepy.editor as mp
 from pydub import AudioSegment
 from pydub.exceptions import CouldntDecodeError
